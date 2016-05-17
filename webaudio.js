@@ -1,95 +1,101 @@
-(function() {
-    var context, 
-        soundSource, 
-        soundBuffer,
-        url = 'dubstep.ogg';
+// Start off by initializing a new context.
+context = new (window.AudioContext || window.webkitAudioContext)();
 
-    // Step 1 - Initialise the Audio Context
-    // There can be only one!
-    function init() {
-        if (typeof AudioContext !== "undefined") {
-            context = new AudioContext();
-        } else if (typeof webkitAudioContext !== "undefined") {
-            context = new webkitAudioContext();
-        } else {
-            throw new Error('AudioContext not supported. :(');
+if (!context.createGain)
+  context.createGain = context.createGainNode;
+if (!context.createDelay)
+  context.createDelay = context.createDelayNode;
+if (!context.createScriptProcessor)
+  context.createScriptProcessor = context.createJavaScriptNode;
+
+// shim layer with setTimeout fallback
+window.requestAnimFrame = (function(){
+return  window.requestAnimationFrame       || 
+  window.webkitRequestAnimationFrame || 
+  window.mozRequestAnimationFrame    || 
+  window.oRequestAnimationFrame      || 
+  window.msRequestAnimationFrame     || 
+  function( callback ){
+  window.setTimeout(callback, 1000 / 60);
+};
+})();
+
+
+function playSound(buffer, time) {
+  var source = context.createBufferSource();
+  source.buffer = buffer;
+  source.connect(context.destination);
+  source[source.start ? 'start' : 'noteOn'](time);
+}
+
+function loadSounds(obj, soundMap, callback) {
+  // Array-ify
+  var names = [];
+  var paths = [];
+  for (var name in soundMap) {
+    var path = soundMap[name];
+    names.push(name);
+    paths.push(path);
+  }
+  bufferLoader = new BufferLoader(context, paths, function(bufferList) {
+    for (var i = 0; i < bufferList.length; i++) {
+      var buffer = bufferList[i];
+      var name = names[i];
+      obj[name] = buffer;
+    }
+    if (callback) {
+      callback();
+    }
+  });
+  bufferLoader.load();
+}
+
+
+
+
+function BufferLoader(context, urlList, callback) {
+  this.context = context;
+  this.urlList = urlList;
+  this.onload = callback;
+  this.bufferList = new Array();
+  this.loadCount = 0;
+}
+
+BufferLoader.prototype.loadBuffer = function(url, index) {
+  // Load buffer asynchronously
+  var request = new XMLHttpRequest();
+  request.open("GET", url, true);
+  request.responseType = "arraybuffer";
+
+  var loader = this;
+
+  request.onload = function() {
+    // Asynchronously decode the audio file data in request.response
+    loader.context.decodeAudioData(
+      request.response,
+      function(buffer) {
+        if (!buffer) {
+          alert('error decoding file data: ' + url);
+          return;
         }
-    }
+        loader.bufferList[index] = buffer;
+        if (++loader.loadCount == loader.urlList.length)
+          loader.onload(loader.bufferList);
+      },
+      function(error) {
+        console.error('decodeAudioData error', error);
+      }
+    );
+  }
 
-    // Step 2: Load our Sound using XHR
-    function startSound() {
-        // Note: this loads asynchronously
-        var request = new XMLHttpRequest();
-        request.open("GET", url, true);
-        request.responseType = "arraybuffer";
+  request.onerror = function() {
+    alert('BufferLoader: XHR error');
+  }
 
-        // Our asynchronous callback
-        request.onload = function() {
-            var audioData = request.response;
+  request.send();
+};
 
-            audioGraph(audioData);
-
-
-        };
-
-        request.send();
-    }
-
-    // Finally: tell the source when to start
-    function playSound() {
-        // play the source now
-        soundSource.start(context.currentTime);
-    }
-
-    function stopSound() {
-        // stop the source now
-        soundSource.stop(context.currentTime);
-    }
-
-    // Events for the play/stop bottons
-    document.querySelector('.play').addEventListener('click', startSound);
-    document.querySelector('.stop').addEventListener('click', stopSound);
-
-
-    // This is the code we are interested in
-    function audioGraph(audioData) {
-        // create a sound source
-        soundSource = context.createBufferSource();
-
-        // The Audio Context handles creating source buffers from raw binary
-        context.decodeAudioData(audioData, function(soundBuffer){
-            // Add the buffered data to our object
-            soundSource.buffer = soundBuffer;
-    
-            volumeNode = context.createGain();
-    
-            //Set the volume
-            volumeNode.gain.value = 0.1;
-    
-            // Wiring
-            soundSource.connect(volumeNode);
-            volumeNode.connect(context.destination);
-            
-            filterNode = context.createBiquadFilter();
- 
-            // Specify this is a lowpass filter
-            filterNode.type = 0;
- 
-            // Quieten sounds over 220Hz
-            filterNode.frequency.value = 220;
- 
-            soundSource.connect(volumeNode);
-            volumeNode.connect(filterNode);
-            filterNode.connect(context.destination);
-    
-            // Finally
-            playSound(soundSource);
-        });
-      
-    }
-
-
-    init();
-
-
-}());
+BufferLoader.prototype.load = function() {
+  for (var i = 0; i < this.urlList.length; ++i)
+  this.loadBuffer(this.urlList[i], i);
+};
