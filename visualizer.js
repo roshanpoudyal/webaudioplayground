@@ -1,5 +1,6 @@
-var WIDTH = 640;
-var HEIGHT = 360;
+// this height and width vars used to set canvas dimensions respectively
+var WIDTH = document.body.offsetWidth;
+var HEIGHT = document.body.offsetHeight;
 
 // Interesting parameters to tweak!
 var SMOOTHING = 0.8;
@@ -103,6 +104,6 @@ VisualizerSample.prototype.getFrequencyValue = function(freq) {
 
 // create new instance of visualizer and let it work
 var sample = new VisualizerSample();
-document.querySelector('button').addEventListener('click', function() {
+  document.querySelector('button').addEventListener('click', function() {
   sample.togglePlayback()
 });
